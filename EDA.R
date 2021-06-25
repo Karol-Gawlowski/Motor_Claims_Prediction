@@ -6,6 +6,7 @@ library(fitdistrplus)
 # https://stats.idre.ucla.edu/stata/seminars/regression-models-with-count-data/
 # https://rpubs.com/Victorp/france_ggiraph
 # https://www.kaggle.com/floser/glm-neural-nets-and-xgboost-for-insurance-pricing
+# https://openacttexts.github.io/Loss-Data-Analytics/C-PortMgt.html
 
 freq=read.csv("data/freMTPLfreq.csv")
 sev=read.csv("data/freMTPLsev.csv")
@@ -19,8 +20,8 @@ data$ClaimAmount=replace_na(data$ClaimAmount,0)
 data=data %>% mutate(ClaimAmount=replace_na(data$ClaimAmount,0),
                      Power=factor(Power),
                      Region=factor(Region),
-                     Brand=factor(Brand),
                      Gas=factor(Gas),
+                     Brand=factor(Brand),
                      Brand=case_when(Brand=="Fiat"~"Fiat",
                                      Brand=="Japanese (except Nissan) or Korean"~"Jap_Kor",
                                      Brand=="Mercedes, Chrysler or BMW"~"Merc_Chrys_BMW",
@@ -28,7 +29,13 @@ data=data %>% mutate(ClaimAmount=replace_na(data$ClaimAmount,0),
                                      Brand=="other"~"other",
                                      Brand=="Renault, Nissan or Citroen"~"Ren_Nis_Citr",
                                      Brand=="Volkswagen, Audi, Skoda or Seat"~"VW_Au_Sk_Se",
-                                     ))
+                                     ),
+                     Region=str_replace_all(Region,"-","_"),
+                     Brand=factor(Brand)) #done the 2nd time, otherwise err bc of case_when) 
+                     
+
+
+str_replace(data$Region,"_","-")
 
 data %>% select(Region,DriverAge,ClaimNb) %>% 
   # filter(ClaimNb>0) %>% 
@@ -98,7 +105,6 @@ data %>% group_by(Brand) %>%
 data %>% group_by(Gas) %>% 
          summarise(n=n()/nrow(data)) 
 
-
 # some portfolio summary statistics by region
 data %>% select(Region,ClaimNb,ClaimAmount) %>% 
   group_by(Region) %>% 
@@ -111,6 +117,7 @@ data %>% select(Region,ClaimNb,ClaimAmount) %>%
             Severity_avg=mean(ClaimAmount),
             Severity_stdev=sqrt(var(ClaimAmount)),
             Severity_over_2k=sum((ClaimAmount>2000)*1),
+            Severity_top_0_5p=quantile(ClaimAmount,probs=0.995), 
             Severity_Max=max(ClaimAmount)) %>% 
   arrange(-P_Count)
 
@@ -187,11 +194,62 @@ data %>% ggplot(aes(x=ClaimAmount, fill=Gas))+
 
 
 # Check the distribution of CLaims severity
+# we can see that well known prob distr won't fit well 
+ggplot(data,aes(x=ClaimAmount))+
+       geom_density()+
+       xlim(1,13140)+
+       ggtitle("Distribution of Power")+ 
+       theme_minimal()+
+       theme(text=element_text(family="serif"))+
+       geom_vline(xintercept = 900, 
+                  linetype="dashed", 
+                  color = "red", 
+                  size=0.5)+
+       geom_vline(xintercept = 1500, 
+                  linetype="dashed", 
+                  color = "red", 
+                  size=0.5)
 
+# descriptive stats of policyholders for the three given intervals of ClaimAmount
+# no obvious observations. 
 
+# below 900
+data %>% filter(ClaimAmount<900) %>% 
+         select(CarAge,DriverAge,Density) %>% 
+         apply(2,mean) %>% 
+         round(2)
+ 
+data %>% filter(ClaimAmount<900) %>% 
+         select(Power,Brand,Region) %>% 
+         group_by(Power) %>% 
+         summarise(n=n(),
+                   freq=n()/nrow(data)) %>% 
+         arrange(-n)
 
-fitdist(data$ClaimAmount, distr, method = "mle")
+# claims [900,1500]
+data %>% filter(ClaimAmount>900 & ClaimAmount<1500) %>% 
+         select(CarAge,DriverAge,Density) %>% 
+         apply(2,mean) %>% 
+         round(2)
 
+data %>% filter(ClaimAmount>900 & ClaimAmount<1500) %>% 
+  select(Power,Brand,Region) %>% 
+  group_by(Power) %>% 
+  summarise(n=n(),
+            freq=n()/nrow(data)) %>% 
+  arrange(-n)
 
+# attritional claims >1500
+data %>% filter(ClaimAmount>1500) %>% 
+         select(CarAge,DriverAge,Density) %>% 
+         apply(2,mean) %>% 
+         round(2)
+
+data %>% filter(ClaimAmount>1500) %>% 
+         select(Power,Brand,Region) %>% 
+         group_by(Power) %>% 
+         summarise(n=n(),
+                   freq=n()/nrow(data)) %>% 
+         arrange(-n)
 
 
